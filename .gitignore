@@ -1,0 +1,9 @@
+# 配置文件含密钥，绝不提交
+.env
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.DS_Store
