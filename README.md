@@ -77,6 +77,7 @@ python -m app.main            # 长期运行建议用 systemd / supervisor / scr
 ```
 
 启动后：
+- 产品展示页：`http://服务器IP:8080/`（公开页面，带动画演示，可用来给客户看或录屏；按钮文字用 `.env` 的 `LANDING_CONTACT` 改）
 - 粘贴询盘页面：`http://服务器IP:8080/paste?token=你的API_TOKEN`（建议手机上收藏）
 - 健康检查：`http://服务器IP:8080/health`
 

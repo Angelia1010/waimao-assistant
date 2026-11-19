@@ -58,6 +58,8 @@ class Config:
     followup_time: str = field(default_factory=lambda: _get("FOLLOWUP_TIME", "09:00"))
     timezone_offset_hours: int = field(default_factory=lambda: _int("TZ_OFFSET_HOURS", 8))
     data_dir: str = field(default_factory=lambda: _get("DATA_DIR", "./data"))
+    # 产品展示页底部按钮的文字（不要放微信号/手机号，避免录屏发小红书时违规）
+    landing_contact: str = field(default_factory=lambda: _get("LANDING_CONTACT", "预约演示"))
 
     # ---- 公司信息（打印在报价单上）----
     company_name_en: str = field(default_factory=lambda: _get("COMPANY_NAME_EN", "Demo Hardware Co., Ltd."))

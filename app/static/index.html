@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>外贸订单助手 · 询盘分级、一键报价、每日跟进</title>
+<meta name="description" content="外贸中小工厂的 AI 订单助手：询盘自动分级、一键生成英文报价单、每天推送跟进提醒，数据留在你自己的飞书。">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0B1220;color:#E8EDF5;font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.num{font-family:"SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+a{color:#7FB0FF}
+.wrap{max-width:1200px;margin:0 auto;padding-left:32px;padding-right:32px}
+.bg{background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:28px 28px}
+.muted{color:#9AA6B8}
+.card{background:#111A2C;border:1px solid rgba(255,255,255,.09);border-radius:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 26px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px}
+.btn-primary{background:#4F8CFF;color:#0B1220}
+.btn-ghost{border:1px solid rgba(232,237,245,.25);color:#E8EDF5;font-weight:500}
+h1,h2{margin:0;font-weight:900;letter-spacing:-.5px}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{opacity:0;transform:scale(.6)}70%{transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes scan{0%{transform:translateY(-100%)}100%{transform:translateY(420%)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.rise{animation:rise .55s cubic-bezier(.2,.8,.2,1) both}
+.pop{animation:pop .45s cubic-bezier(.2,.8,.2,1) both}
+.live{animation:pulse 1.6s ease-in-out infinite}
+.caret{animation:blink 1s step-end infinite}
+.dot{width:7px;height:7px;border-radius:50%;background:#3DDC97;display:inline-block}
+.badge{flex:none;min-width:44px;text-align:center;padding:5px 10px;border-radius:8px;font-weight:700;font-size:13px}
+.lv-A{background:#FFB547;color:#2A1A00}.lv-B{background:#4F8CFF;color:#06142E}.lv-C{background:#5B6782;color:#E8EDF5}.lv-X{background:#2A3550;color:#AAB6C8}
+.mail{display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;background:#16213A;border:1px solid rgba(255,255,255,.06)}
+.ava{width:38px;height:38px;flex:none;border-radius:10px;background:#1E2B48;color:#9CC0FF;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step{display:block;width:100%;min-height:44px;text-align:left;cursor:pointer;font-family:inherit;padding:18px 20px;border-radius:16px;background:transparent;border:1px solid rgba(255,255,255,.08);color:inherit;transition:background .3s,border-color .3s}
+.step.on{background:#16213A;border-color:rgba(79,140,255,.55)}
+.step .n{flex:none;width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;background:#1A2540;color:#8F9BB0}
+.step.on .n{background:#4F8CFF;color:#0B1220}
+.bar{margin-top:14px;height:3px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:#4F8CFF;transition:width .6s linear}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;background:#16213A;border-radius:10px;font-size:14px}
+.row{display:grid;grid-template-columns:2.2fr .7fr 1fr 2.6fr;gap:12px;align-items:center;padding:13px 16px;font-size:13.5px;border-top:1px solid rgba(255,255,255,.06)}
+.lvl{display:inline-block;min-width:28px;text-align:center;padding:2px 8px;border-radius:6px;font-weight:700;font-size:12px}
+.feat{background:#111A2C;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:26px}
+.feat .k{width:44px;height:44px;border-radius:12px;background:rgba(79,140,255,.14);color:#7FB0FF;display:flex;align-items:center;justify-content:center;font-weight:700}
+.grid-auto{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.screen{display:none}.screen.on{display:block}
+@media (max-width:640px){h1{font-size:42px!important}.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<div class="bg">
+
+<header class="wrap" style="padding-top:22px;padding-bottom:22px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="width:34px;height:34px;border-radius:9px;background:#4F8CFF;display:flex;align-items:center;justify-content:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0B1220" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7l8 5 8-5"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+    </div>
+    <span style="font-weight:700;font-size:17px;letter-spacing:.5px">外贸订单助手</span>
+  </div>
+  <nav style="display:flex;flex-wrap:wrap;align-items:center;gap:28px;font-size:14px">
+    <a class="hide-sm" href="#demo" style="color:#9AA6B8;text-decoration:none">产品演示</a>
+    <a class="hide-sm" href="#features" style="color:#9AA6B8;text-decoration:none">功能</a>
+    <a class="hide-sm" href="#deploy" style="color:#9AA6B8;text-decoration:none">部署</a>
+    <a href="#contact" style="color:#0B1220;background:#E8EDF5;text-decoration:none;padding:10px 18px;border-radius:999px;font-weight:500">预约演示</a>
+  </nav>
+</header>
+
+<section class="wrap" style="padding-top:56px;padding-bottom:96px;display:flex;flex-wrap:wrap;align-items:center;gap:56px">
+  <div style="flex:1 1 460px;min-width:0">
+    <div class="rise" style="display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid rgba(79,140,255,.4);border-radius:999px;font-size:13px;color:#9CC0FF">
+      <span class="dot live"></span>为外贸中小工厂设计 · 跑在你自己的飞书里
+    </div>
+    <h1 class="rise" style="margin-top:26px;font-size:64px;line-height:1.12;animation-delay:.08s">询盘进来，<br><span style="color:#4F8CFF">AI 先接住。</span></h1>
+    <p class="rise muted" style="margin:24px 0 0;font-size:19px;line-height:1.75;max-width:520px;color:#AAB6C8;animation-delay:.16s">邮箱询盘自动整理、打 A/B/C 分级；在表格里勾一下，几秒生成英文报价单；每天早上 9 点，告诉业务员今天该跟谁、说什么。</p>
+    <div class="rise" style="display:flex;flex-wrap:wrap;gap:14px;margin-top:36px;animation-delay:.24s">
+      <a class="btn btn-primary" href="#demo">看它怎么工作
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="btn btn-ghost" href="#contact">预约演示</a>
+    </div>
+    <div class="rise" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:48px;max-width:520px;animation-delay:.32s">
+      <div><div class="num" style="font-size:30px;font-weight:700">0</div><div style="font-size:13px;color:#8F9BB0;margin-top:2px">要学的新软件</div></div>
+      <div><div class="num" style="font-size:30px;font-weight:700">1 勾</div><div style="font-size:13px;color:#8F9BB0;margin-top:2px">生成一份报价单</div></div>
+      <div><div class="num" style="font-size:30px;font-weight:700">9:00</div><div style="font-size:13px;color:#8F9BB0;margin-top:2px">每天推送跟进清单</div></div>
+    </div>
+  </div>
+
+  <div style="flex:1 1 440px;min-width:0">
+    <div class="card" style="position:relative;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07)">
+        <div style="display:flex;gap:7px"><span style="width:11px;height:11px;border-radius:50%;background:#2A3550"></span><span style="width:11px;height:11px;border-radius:50%;background:#2A3550"></span><span style="width:11px;height:11px;border-radius:50%;background:#2A3550"></span></div>
+        <div style="font-size:12px;color:#8F9BB0;display:flex;align-items:center;gap:6px"><span class="dot live" style="width:6px;height:6px"></span>sales@ 收件箱 · AI 正在处理</div>
+      </div>
+      <div style="position:relative;padding:14px;min-height:418px">
+        <div style="position:absolute;left:0;right:0;top:0;height:90px;background:linear-gradient(180deg,rgba(79,140,255,0) 0%,rgba(79,140,255,.10) 100%);animation:scan 3.2s linear infinite;pointer-events:none"></div>
+        <div id="inbox" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font-size:12px;color:#8F9BB0">
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:#FFB547"></span>A 级：当天报价</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:#4F8CFF"></span>B 级：先追问需求</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:#5B6782"></span>C 级 / 推广邮件</span>
+      <span>演示数据</span>
+    </div>
+  </div>
+</section>
+
+<section style="border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07);background:#0E1626">
+  <div class="wrap" style="padding-top:64px;padding-bottom:64px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:40px">
+    <div><div class="num" style="font-size:13px;color:#FFB547;letter-spacing:2px">01</div><div style="font-size:22px;font-weight:700;margin-top:10px">报完价，客户已读不回</div><p class="muted" style="margin:10px 0 0;font-size:15px;line-height:1.75">客户一多，谁该今天跟、该说什么全靠脑子记。跟早了怕烦，跟晚了单子就丢了。</p></div>
+    <div><div class="num" style="font-size:13px;color:#FFB547;letter-spacing:2px">02</div><div style="font-size:22px;font-weight:700;margin-top:10px">询盘和垃圾邮件混在一起</div><p class="muted" style="margin:10px 0 0;font-size:15px;line-height:1.75">真采购、只要价格表的、SEO 推广、钓鱼邮件，每封都得点开看，真正的大单反而回慢了。</p></div>
+    <div><div class="num" style="font-size:13px;color:#FFB547;letter-spacing:2px">03</div><div style="font-size:22px;font-weight:700;margin-top:10px">业务员一走，客户就断了</div><p class="muted" style="margin:10px 0 0;font-size:15px;line-height:1.75">客户资料和沟通记录都在个人邮箱和微信里，新人接手不知道之前聊到哪一步。</p></div>
+  </div>
+</section>
+
+<section id="demo" class="wrap" style="padding-top:110px;padding-bottom:40px">
+  <div style="text-align:center">
+    <div class="num" style="font-size:13px;color:#7FB0FF;letter-spacing:3px">HOW IT WORKS</div>
+    <h2 style="margin-top:14px;font-size:44px">四步，从询盘到成交跟进</h2>
+    <p class="muted" style="margin:14px auto 0;font-size:17px;max-width:620px;line-height:1.7">业务员不用换工具，日常只打开一张飞书表格。点左边任意一步看细节。</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:28px;margin-top:56px">
+    <div style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:12px">
+      <div id="steps" style="display:flex;flex-direction:column;gap:12px"></div>
+      <button id="autoBtn" type="button" style="align-self:flex-start;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid rgba(232,237,245,.2);background:transparent;color:#C7D2E3;font-family:inherit;font-size:14px;cursor:pointer">暂停自动播放</button>
+    </div>
+    <div class="card" style="flex:999 1 560px;min-width:0;padding:28px;min-height:470px">
+
+      <div class="screen" data-s="0">
+        <div style="display:flex;flex-wrap:wrap;gap:20px">
+          <div style="flex:1 1 260px;min-width:0;background:#0E1626;border-radius:14px;padding:20px;border:1px solid rgba(255,255,255,.06)">
+            <div style="font-size:12px;color:#8F9BB0">客户来信 · 原文</div>
+            <div class="num" style="font-size:13.5px;line-height:1.75;color:#C7D2E3;margin-top:10px">Dear Sales Team,<br>We are a hardware distributor in Germany… Ball bearing drawer slide 450mm (your model DS-450) – 5,000 pairs. Our target price is around USD 2.20/pair FOB Ningbo… delivered to Hamburg by early March.<br>Klaus Weber, Nordbau Demo GmbH<span class="caret" style="color:#4F8CFF">▍</span></div>
+          </div>
+          <div style="flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:12px;color:#8F9BB0">AI 提取后写进表格</div>
+            <div class="kv rise" style="animation-delay:.1s"><span style="color:#8F9BB0">客户</span><span>Nordbau Demo GmbH</span></div>
+            <div class="kv rise" style="animation-delay:.2s"><span style="color:#8F9BB0">国家</span><span>德国</span></div>
+            <div class="kv rise" style="animation-delay:.3s"><span style="color:#8F9BB0">产品 / 数量</span><span>DS-450 · 5,000 对</span></div>
+            <div class="kv rise" style="animation-delay:.4s"><span style="color:#8F9BB0">目标价</span><span>USD 2.20 FOB Ningbo</span></div>
+            <div class="kv rise" style="animation-delay:.5s"><span style="color:#8F9BB0">交期</span><span>3 月初到汉堡</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen" data-s="1">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div style="font-size:12px;color:#8F9BB0">飞书多维表格 ·「询盘客户」</div>
+          <div style="font-size:12px;color:#FFB547;display:inline-flex;align-items:center;gap:6px"><span class="dot live" style="width:6px;height:6px;background:#FFB547"></span>A 级询盘已推送到飞书群</div>
+        </div>
+        <div style="overflow-x:auto;margin-top:14px;border-radius:12px;border:1px solid rgba(255,255,255,.07)">
+          <div style="min-width:560px">
+            <div class="row" style="border-top:0;font-size:12px;color:#8F9BB0;background:#0E1626"><span>客户公司</span><span>等级</span><span>国家</span><span>AI 摘要</span></div>
+            <div id="rows"></div>
+          </div>
+        </div>
+        <div style="margin-top:16px;font-size:13px;color:#8F9BB0">推广、SEO、钓鱼邮件被识别为“非询盘”，不进表。分级标准按行业可调。</div>
+      </div>
+
+      <div class="screen" data-s="2">
+        <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">
+          <div style="flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:12px;color:#8F9BB0">在表格里勾选</div>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#16213A;border-radius:12px;border:1px solid rgba(79,140,255,.5)">
+              <div class="pop" style="width:22px;height:22px;border-radius:6px;background:#4F8CFF;display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0B1220" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>
+              <span style="font-size:15px;font-weight:500">生成报价单</span>
+            </div>
+            <div class="rise" style="padding:14px;background:#16213A;border-radius:12px;font-size:13.5px;line-height:1.7;color:#C7D2E3;animation-delay:.25s"><span style="color:#8F9BB0">自动完成：</span><br>按产品库价格报价<br>数量低于起订量自动按起订量<br>PDF 写回表格附件<br>写好英文报价邮件草稿</div>
+          </div>
+          <div class="rise num" style="flex:2 1 320px;min-width:0;background:#fff;color:#1D2433;border-radius:8px;padding:22px;font-size:12px;animation-delay:.35s">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+              <div><div style="color:#1F3A5F;font-weight:700;font-size:15px">Demo Hardware Co., Ltd.</div><div style="color:#5B6573;margin-top:2px">Ningbo, China</div></div>
+              <div style="color:#1F3A5F;font-weight:700;font-size:20px">QUOTATION</div>
+            </div>
+            <div style="height:2px;background:#1F3A5F;margin:12px 0"></div>
+            <div style="display:flex;justify-content:space-between;color:#5B6573;gap:8px;flex-wrap:wrap"><span>To: Nordbau Demo Handel GmbH</span><span>No. Q20261119-001</span></div>
+            <div style="margin-top:12px">
+              <div style="display:grid;grid-template-columns:1fr 2fr 1fr 1fr;gap:8px;background:#1F3A5F;color:#fff;padding:7px 8px"><span>Model</span><span>Description</span><span style="text-align:right">Qty</span><span style="text-align:right">Amount</span></div>
+              <div style="display:grid;grid-template-columns:1fr 2fr 1fr 1fr;gap:8px;padding:7px 8px;border-bottom:1px solid #D5DBE3"><span>HG-304A</span><span>Door hinge 4"</span><span style="text-align:right">8,000</span><span style="text-align:right">6,880.00</span></div>
+              <div style="display:grid;grid-template-columns:1fr 2fr 1fr 1fr;gap:8px;padding:7px 8px;background:#EEF2F7"><span>DS-450</span><span>Drawer slide 450mm</span><span style="text-align:right">5,000</span><span style="text-align:right">11,750.00</span></div>
+              <div style="display:flex;justify-content:flex-end;gap:18px;padding:10px 8px 0;font-weight:700;color:#1F3A5F;font-size:14px"><span>TOTAL</span><span>USD 18,630.00</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen" data-s="3">
+        <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:center;justify-content:center">
+          <div style="flex:0 0 300px;max-width:100%;background:#05080F;border-radius:34px;padding:12px;border:1px solid rgba(255,255,255,.12)">
+            <div style="background:#F4F6FA;border-radius:24px;padding:16px 14px;min-height:380px;color:#1D2433">
+              <div style="font-size:11px;color:#5B6573;text-align:center">飞书 · 外贸团队群</div>
+              <div class="rise" style="margin-top:12px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #E3E8F0;animation-delay:.15s">
+                <div style="background:#185FA5;color:#fff;padding:9px 12px;font-size:13px;font-weight:700"><span id="today">今日</span> 跟进提醒</div>
+                <div style="padding:10px 12px;font-size:12px;line-height:1.6">
+                  <div style="font-weight:700">今天要跟进 3 位客户</div>
+                  <div style="margin-top:8px;font-weight:700">1. Lumière Maison Demo</div>
+                  <div style="color:#5B6573">法国 · A级 · 已3天未联系</div>
+                  <div class="num" style="color:#3A4352;background:#F1F4F9;border-radius:6px;padding:6px 8px;margin-top:4px">Our production slot for next month is filling up — shall I reserve capacity for you?</div>
+                  <div style="margin-top:8px;font-weight:700">2. Gulf Build Demo</div>
+                  <div style="color:#5B6573">阿联酋 · B级 · 第2次 · 送样品</div>
+                  <div style="margin-top:8px;font-weight:700">3. Polska Meble Demo <span style="background:#FCEBEB;color:#791F1F;border-radius:999px;padding:1px 7px;font-size:11px">建议止损</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1 1 260px;min-width:0">
+            <div style="font-size:26px;font-weight:900;line-height:1.35">每次跟进，都给客户<br><span style="color:#FFB547">一个新的回复理由</span></div>
+            <p class="muted" style="font-size:15px;line-height:1.8;margin:14px 0 0">不发 “Any update?”。第 1 次提产能排期，第 2 次送样品，第 3 次给小批量试单；5 次没回，礼貌收尾、转入低频维护。</p>
+            <p class="muted" style="font-size:15px;line-height:1.8;margin:10px 0 0">跟进完在表格里勾“已跟进”，下次日期自动排好：A 级 2/3/5/7/10 天。</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section id="features" class="wrap" style="padding-top:100px;padding-bottom:40px">
+  <h2 style="font-size:40px">一张表，管住询盘到跟进</h2>
+  <div class="grid-auto" style="margin-top:40px">
+    <div class="feat"><div class="k num">01</div><div style="font-size:18px;font-weight:700;margin-top:18px">询盘分级</div><div class="muted" style="font-size:14.5px;line-height:1.75;margin-top:8px">提取公司、国家、型号、数量、目标价，按 A/B/C 分级并写清理由。</div></div>
+    <div class="feat"><div class="k num">02</div><div style="font-size:18px;font-weight:700;margin-top:18px">一键 PDF 报价</div><div class="muted" style="font-size:14.5px;line-height:1.75;margin-top:8px">价格只取自产品库，自动套起订量，附带贸易条款与有效期。</div></div>
+    <div class="feat"><div class="k num">03</div><div style="font-size:18px;font-weight:700;margin-top:18px">报价邮件草稿</div><div class="muted" style="font-size:14.5px;line-height:1.75;margin-top:8px">引用客户需求里的细节，结尾只问一个好回答的问题。</div></div>
+    <div class="feat"><div class="k num">04</div><div style="font-size:18px;font-weight:700;margin-top:18px">每日跟进推送</div><div class="muted" style="font-size:14.5px;line-height:1.75;margin-top:8px">飞书群卡片，按等级排序，附每位客户的英文话术。</div></div>
+    <div class="feat"><div class="k num">05</div><div style="font-size:18px;font-weight:700;margin-top:18px">多渠道录入</div><div class="muted" style="font-size:14.5px;line-height:1.75;margin-top:8px">手机打开粘贴页，WhatsApp、国际站、展会询盘一样入表。</div></div>
+    <div class="feat"><div class="k num">06</div><div style="font-size:18px;font-weight:700;margin-top:18px">跟进自动排期</div><div class="muted" style="font-size:14.5px;line-height:1.75;margin-top:8px">勾选已跟进，次数加一、下次日期自动算好，5 次未回提示止损。</div></div>
+  </div>
+</section>
+
+<section class="wrap" style="padding-top:80px;padding-bottom:40px">
+  <div class="card" style="border-radius:22px;padding:44px;display:flex;flex-wrap:wrap;gap:36px">
+    <div style="flex:1 1 300px;min-width:0">
+      <div class="num" style="font-size:13px;color:#3DDC97;letter-spacing:3px">YOUR DATA STAYS YOURS</div>
+      <h2 style="margin-top:12px;font-size:34px;line-height:1.3">客户资料留在公司，<br>不跟着人走</h2>
+    </div>
+    <div style="flex:2 1 420px;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px">
+      <div><div style="font-size:16px;font-weight:700">数据在你自己的飞书</div><div class="muted" style="font-size:14px;line-height:1.75;margin-top:8px">询盘、报价、每次跟进都写进公司自己的多维表格，新人接手一看就懂。</div></div>
+      <div><div style="font-size:16px;font-weight:700">邮箱只读</div><div class="muted" style="font-size:14px;line-height:1.75;margin-top:8px">只读取新邮件，不标已读、不删除，也不会替你发出任何邮件。</div></div>
+      <div><div style="font-size:16px;font-weight:700">人来确认</div><div class="muted" style="font-size:14px;line-height:1.75;margin-top:8px">报价单和话术都是草稿，业务员检查后自己发给客户。</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="deploy" class="wrap" style="padding-top:80px;padding-bottom:40px">
+  <h2 style="font-size:40px">约 30 分钟上线</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:40px;border-top:1px solid rgba(255,255,255,.1)">
+    <div style="padding:26px 24px 26px 0"><div class="num" style="font-size:44px;font-weight:700;color:#4F8CFF">1</div><div style="font-size:17px;font-weight:700;margin-top:8px">建飞书应用</div><div class="muted" style="font-size:14px;line-height:1.75;margin-top:6px">开通多维表格权限并发布。</div></div>
+    <div style="padding:26px 24px 26px 0"><div class="num" style="font-size:44px;font-weight:700;color:#4F8CFF">2</div><div style="font-size:17px;font-weight:700;margin-top:8px">授权一张表</div><div class="muted" style="font-size:14px;line-height:1.75;margin-top:6px">新建多维表格，添加文档应用。</div></div>
+    <div style="padding:26px 24px 26px 0"><div class="num" style="font-size:44px;font-weight:700;color:#4F8CFF">3</div><div style="font-size:17px;font-weight:700;margin-top:8px">填配置启动</div><div class="muted" style="font-size:14px;line-height:1.75;margin-top:6px">飞书、大模型、邮箱信息填好，Docker 一条命令。</div></div>
+    <div style="padding:26px 24px 26px 0"><div class="num" style="font-size:44px;font-weight:700;color:#4F8CFF">4</div><div style="font-size:17px;font-weight:700;margin-top:8px">一键建表</div><div class="muted" style="font-size:14px;line-height:1.75;margin-top:6px">脚本自动建好 4 张表，导入产品库即可用。</div></div>
+  </div>
+</section>
+
+<section id="contact" class="wrap" style="padding-top:90px;padding-bottom:110px;text-align:center">
+  <h2 style="font-size:48px;line-height:1.25">让业务员把时间<br>留给<span style="color:#4F8CFF">谈单</span></h2>
+  <p class="muted" style="margin:18px auto 0;font-size:17px;max-width:560px;line-height:1.75">用你们工厂的真实产品库，30 分钟演示一遍完整流程。</p>
+  <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:14px;margin-top:34px">
+    <a class="btn btn-primary" href="#demo" style="min-height:52px;font-size:17px">{{CONTACT}}</a>
+  </div>
+  <div style="margin-top:70px;padding-top:24px;border-top:1px solid rgba(255,255,255,.07);font-size:13px;color:#6F7B90">外贸订单助手 · 页面中的客户与数据均为演示</div>
+</section>
+
+</div>
+<script>
+(function () {
+  var MAILS = [
+    ['NB', 'Klaus Weber · Nordbau Demo', '邮箱', 'RFQ – drawer slides DS-450 and hinges HG-304A', '德国 · DS-450 5,000 对 · 目标价 USD 2.20', 'A', 'A'],
+    ['SE', 'Digital Growth Agency', '邮箱', 'Get your website on Google page 1 in 30 days', '推广邮件，已过滤，不进表', '过滤', 'X'],
+    ['CK', 'Emma · Coastal Kitchens Demo', '邮箱', 'Soft close hinges inquiry', '澳大利亚 · 缓冲铰链 · 数量未给，先追问', 'B', 'B'],
+    ['FA', 'Carlos · Ferretería Andes Demo', 'WhatsApp', 'Aluminum handle PH-128 3000 pcs, CIF San Antonio', '智利 · PH-128 / PH-160 · 要样品', 'A', 'A'],
+    ['MK', 'mike.trading.demo@gmail.com', '邮箱', 'price list', '只要价格表，信息很少', 'C', 'C']
+  ];
+  var STEPS = [
+    ['询盘自动入库', '邮箱、WhatsApp、阿里国际站的询盘，AI 读完写进表格'],
+    ['AI 打 A/B/C 分级', '先看 A 级；推广和垃圾邮件自动过滤'],
+    ['勾一下生成报价单', '几秒出英文 PDF，附报价邮件草稿'],
+    ['每天 9 点提醒跟进', '按等级排序，每个客户附一段话术']
+  ];
+  var ROWS = [
+    ['Nordbau Demo Handel GmbH', 'A', '德国', 'DS-450 5000对，目标价 2.20，3月初交货'],
+    ['Ferretería Andes Demo', 'A', '智利', 'PH-128 3000个，CIF，要先寄样品'],
+    ['HomeFix Demo Supplies', 'B', '英国', 'DS-500 试单 300对，低于起订量'],
+    ['Coastal Kitchens Demo', 'B', '澳大利亚', '缓冲铰链，数量未给，先追问'],
+    ['mike.trading.demo@gmail', 'C', '—', '只要目录和价格表']
+  ];
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  var d = new Date();
+  document.getElementById('today').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+
+  var inbox = document.getElementById('inbox');
+  var nodes = MAILS.map(function (m) {
+    var el = document.createElement('div');
+    el.className = 'mail rise';
+    el.style.display = 'none';
+    el.innerHTML = '<div class="ava num">' + esc(m[0]) + '</div>' +
+      '<div style="flex:1;min-width:0"><div class="ell" style="font-size:14px;font-weight:500">' + esc(m[1]) +
+      ' <span style="font-size:11px;color:#8F9BB0;font-weight:400">' + esc(m[2]) + '</span></div>' +
+      '<div class="ell" style="font-size:12.5px;color:#8F9BB0;margin-top:3px">' + esc(m[3]) + '</div>' +
+      '<div class="ai rise" style="font-size:12px;color:#C7D2E3;margin-top:6px;display:none">' + esc(m[4]) + '</div></div>' +
+      '<div class="wait live" style="width:44px;text-align:center;font-size:12px;color:#8F9BB0">分析中</div>' +
+      '<div class="badge pop num lv-' + m[6] + '" style="display:none">' + esc(m[5]) + '</div>';
+    inbox.appendChild(el);
+    return el;
+  });
+
+  document.getElementById('rows').innerHTML = ROWS.map(function (r, i) {
+    return '<div class="row rise" style="animation-delay:' + (i * 0.09) + 's"><span class="ell">' + esc(r[0]) +
+      '</span><span><span class="lvl num lv-' + r[1] + '">' + r[1] + '</span></span><span style="color:#C7D2E3">' +
+      esc(r[2]) + '</span><span class="ell" style="color:#9AA6B8">' + esc(r[3]) + '</span></div>';
+  }).join('');
+
+  var stepsBox = document.getElementById('steps');
+  var stepBtns = STEPS.map(function (s, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'step';
+    b.innerHTML = '<div style="display:flex;align-items:center;gap:14px"><div class="n num">0' + (i + 1) + '</div>' +
+      '<div style="min-width:0"><div style="font-size:17px;font-weight:700">' + esc(s[0]) + '</div>' +
+      '<div style="font-size:13.5px;color:#9AA6B8;margin-top:4px;line-height:1.6">' + esc(s[1]) + '</div></div></div>' +
+      '<div class="bar"><i></i></div>';
+    b.addEventListener('click', function () { auto = false; setStep(i); within = 3; paintBars(); autoBtn.textContent = '继续自动播放'; });
+    stepsBox.appendChild(b);
+    return b;
+  });
+  var screens = Array.prototype.slice.call(document.querySelectorAll('.screen'));
+  var autoBtn = document.getElementById('autoBtn');
+  var step = 0, within = 1, auto = true, tick = 0;
+
+  function restart(el) { el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; }
+  function setStep(i) {
+    step = i;
+    stepBtns.forEach(function (b, j) { b.classList.toggle('on', j === i); });
+    screens.forEach(function (s) {
+      var on = Number(s.getAttribute('data-s')) === i;
+      s.classList.toggle('on', on);
+      if (on) s.querySelectorAll('.rise,.pop').forEach(restart);
+    });
+  }
+  function paintBars() {
+    stepBtns.forEach(function (b, j) {
+      var w = j < step ? 100 : j > step ? 0 : (auto ? Math.round(within / 3 * 100) : 100);
+      b.querySelector('.bar i').style.width = w + '%';
+    });
+  }
+  autoBtn.addEventListener('click', function () {
+    auto = !auto;
+    autoBtn.textContent = auto ? '暂停自动播放' : '继续自动播放';
+    within = 1; paintBars();
+  });
+
+  function paintInbox() {
+    var phase = tick % 14;
+    nodes.forEach(function (el, i) {
+      var shown = phase >= i * 2 + 1, graded = phase >= i * 2 + 2;
+      if (shown && el.style.display === 'none') { el.style.display = 'flex'; restart(el); }
+      if (!shown) el.style.display = 'none';
+      el.querySelector('.wait').style.display = shown && !graded ? 'block' : 'none';
+      var badge = el.querySelector('.badge'), ai = el.querySelector('.ai');
+      if (graded && badge.style.display === 'none') { badge.style.display = 'block'; ai.style.display = 'block'; restart(badge); restart(ai); }
+      if (!graded) { badge.style.display = 'none'; ai.style.display = 'none'; }
+    });
+  }
+
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  setStep(0); paintBars(); paintInbox();
+  setInterval(function () {
+    tick++;
+    paintInbox();
+    if (auto && !reduce) {
+      within++;
+      if (within > 3) { within = 1; setStep((step + 1) % 4); }
+      paintBars();
+    }
+  }, 1700);
+})();
+</script>
+</body>
+</html>

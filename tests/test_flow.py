@@ -149,6 +149,8 @@ def test_http_server(env):
     base = f"http://127.0.0.1:{port}"
     try:
         assert json.load(urllib.request.urlopen(base + "/health"))["ok"] is True
+        home = urllib.request.urlopen(base + "/").read().decode()
+        assert "AI 先接住" in home and "{{CONTACT}}" not in home and "预约演示" in home
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(base + "/paste?token=wrong")
         assert e.value.code == 401

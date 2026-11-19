@@ -1,4 +1,5 @@
 """HTTP 服务（只用 Python 标准库）：
+- GET  /                      产品展示页（公开，无需 token）
 - GET  /health                健康检查
 - GET  /paste?token=...       手动粘贴询盘的网页（阿里国际站 / WhatsApp / 展会）
 - POST /api/inquiry           粘贴询盘入库
@@ -14,11 +15,14 @@ import html
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import schema as S
 
 log = logging.getLogger(__name__)
+
+LANDING_PAGE = Path(__file__).resolve().parent / "static" / "index.html"
 
 PASTE_PAGE = """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -88,6 +92,9 @@ def make_handler(assistant, worker):
         # --------------------------------------------------------------- GET
         def do_GET(self):
             path = urlparse(self.path).path
+            if path in ("/", "/index.html"):
+                page = LANDING_PAGE.read_text("utf-8").replace("{{CONTACT}}", html.escape(cfg.landing_contact))
+                return self._send(200, page, "text/html; charset=utf-8")
             if path == "/health":
                 return self._send(200, {"ok": True, "feishu": cfg.feishu_enabled, "mail": cfg.mail_enabled})
             if path == "/paste":
