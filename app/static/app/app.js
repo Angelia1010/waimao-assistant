@@ -575,36 +575,106 @@
   ROUTES.settings = function (page) {
     var isAdmin = state.user.role === 'admin';
     return api('GET', '/api/settings').then(function (d) {
-      var v = d.values, s = d.status;
+      var v = d.values, s = d.status, sec = d.secrets, presets = d.presets || [];
+      var dis = isAdmin ? '' : ' disabled';
       function inp(k, label, ph, type) {
-        return '<div class="field"><label class="f" for="s_' + k + '">' + label + '</label><input class="input" id="s_' + k + '" name="' + k + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + esc(v[k]) + '" placeholder="' + esc(ph || '') + '"' + (isAdmin ? '' : ' disabled') + '></div>';
+        return '<div class="field"><label class="f" for="s_' + k + '">' + label + '</label><input class="input" id="s_' + k + '" name="' + k + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + esc(v[k]) + '" placeholder="' + esc(ph || '') + '"' + dis + '></div>';
       }
-      page.innerHTML = head('设置', isAdmin ? '这些内容会印在报价单上，修改后立即生效。' : '只有管理员可以修改设置。',
-        isAdmin ? '<button class="btn" id="sPush">发送测试提醒</button><button class="btn" id="sDaily">立即生成今日跟进提醒</button>' : '') +
-        '<div class="grid2"><form id="sForm" class="stack">' +
-        '<div class="card"><h3>公司信息（英文，用于报价单）</h3><div class="form-grid">' + inp('company_name_en', '公司英文名') + inp('company_name_cn', '公司中文名（可选）') + inp('company_contact', '签名（姓名 | 职位）') + inp('company_email', '邮箱') + inp('company_phone', '电话') + inp('company_website', '网站') + '</div>' + inp('company_address', '地址') + '</div>' +
+      function secretInp(k, label, ph) {
+        var set = sec[k];
+        return '<div class="field"><label class="f" for="s_' + k + '">' + label + '</label><div class="row">' +
+          '<input class="input grow" id="s_' + k + '" name="' + k + '" type="password" autocomplete="new-password" placeholder="' + esc(set ? '已配置 ' + set + '，留空表示不修改' : ph) + '"' + dis + '>' +
+          (isAdmin && set ? '<button class="btn sm" type="button" data-clear="' + k + '">清除</button>' : '') + '</div></div>';
+      }
+      var curPreset = (presets.filter(function (p) { return p.base_url && v.llm_base_url && v.llm_base_url.indexOf(p.base_url.replace(/^https?:\/\//, '').split('/')[0]) >= 0; })[0] || (v.llm_base_url ? { id: 'custom' } : presets[0] || { id: 'custom' })).id;
+      var badge = function (ok, yes, no) { return ok ? '<span class="st st-已报价">' + yes + '</span>' : '<span class="st st-已流失">' + no + '</span>'; };
+
+      page.innerHTML = head('设置', isAdmin ? '保存后立即生效，不需要重启服务。' : '只有管理员可以修改设置。',
+        isAdmin ? '<button class="btn" id="sDaily">立即生成今日跟进提醒</button>' : '') +
+        '<div class="grid2"><form id="sForm" class="stack" autocomplete="off">' +
+
+        // AI 大模型
+        '<div class="card" id="cardLlm"><div class="row between wrap" style="margin-bottom:14px"><h3 style="margin:0">' + icon('spark', 16) + ' AI 大模型</h3>' + badge(s.llm_ready, '已连接 · ' + esc(s.llm), '演示模式') + '</div>' +
+        (s.llm_ready ? '' : '<div class="box small" style="margin-bottom:14px;color:var(--amber)">还没有配置大模型密钥，系统正在用规则版 AI 演示，分级和话术质量有限，不要给真实客户用。</div>') +
+        '<div class="field"><label class="f" for="s_preset">服务商</label><select class="input" id="s_preset"' + dis + '>' +
+        presets.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === curPreset ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select>' +
+        '<div class="small dim" id="presetHelp" style="margin-top:6px"></div></div>' +
+        '<div class="form-grid">' + inp('llm_base_url', '接口地址（base_url）', 'https://api.deepseek.com') + inp('llm_model', '模型名', 'deepseek-v4-flash') + '</div>' +
+        secretInp('llm_api_key', 'API 密钥', 'sk-...') +
+        (isAdmin ? '<div class="row wrap"><button class="btn" type="button" id="testLlm">' + icon('spark', 15) + '测试连接</button><span id="llmMsg" class="small"></span></div>' : '') + '</div>' +
+
+        // 飞书
+        '<div class="card" id="cardFeishu"><div class="row between wrap" style="margin-bottom:14px"><h3 style="margin:0">' + icon('bell', 16) + ' 飞书群推送</h3>' + badge(s.feishu_bot, '已开启', '未开启') + '</div>' +
+        '<p class="small muted" style="margin:0 0 14px">A 级询盘和每日跟进清单会推送到飞书群。不配置也可以，提醒会保存在「提醒」页。<br>添加方法：飞书群 → 设置 → 群机器人 → 添加机器人 → 自定义机器人，复制 Webhook 地址。</p>' +
+        inp('feishu_bot_webhook', '群机器人 Webhook 地址', 'https://open.feishu.cn/open-apis/bot/v2/hook/...') +
+        secretInp('feishu_bot_secret', '签名校验密钥（添加机器人时勾了“签名校验”才需要）', '没开签名校验就留空') +
+        '<div class="form-grid">' + inp('followup_time', '每天推送跟进提醒的时间', '09:00', 'time') + '</div>' +
+        (isAdmin ? '<div class="row wrap"><button class="btn" type="button" id="testPush">' + icon('bell', 15) + '发送测试消息</button><span id="pushMsg" class="small"></span></div>' : '') + '</div>' +
+
+        '<div class="card"><h3>公司信息（英文，印在报价单上）</h3><div class="form-grid">' + inp('company_name_en', '公司英文名') + inp('company_name_cn', '公司中文名（可选）') + inp('company_contact', '签名（姓名 | 职位）') + inp('company_email', '邮箱') + inp('company_phone', '电话') + inp('company_website', '网站') + '</div>' + inp('company_address', '地址') + '</div>' +
         '<div class="card"><h3>报价条款</h3><div class="form-grid">' + inp('quote_currency', '币种', 'USD') + inp('quote_incoterm', '贸易条款', 'FOB Ningbo') + inp('quote_validity_days', '报价有效期（天）', '30', 'number') + '</div>' + inp('quote_payment_terms', '付款方式', 'T/T 30% deposit, 70% before shipment') +
-        '<div class="field"><label class="f" for="s_quote_bank_info">银行信息（可选，印在报价单底部）</label><textarea class="input" id="s_quote_bank_info" name="quote_bank_info" style="min-height:80px"' + (isAdmin ? '' : ' disabled') + '>' + esc(v.quote_bank_info) + '</textarea></div></div>' +
-        '<div class="card"><h3>提醒</h3><div class="form-grid">' + inp('followup_time', '每天推送跟进提醒的时间', '09:00') + inp('landing_contact', '首页「预约演示」按钮文字', '预约演示') + '</div>' +
-        inp('feishu_bot_webhook', '飞书群机器人 Webhook（可选）', 'https://open.feishu.cn/open-apis/bot/v2/hook/...') + (isAdmin ? inp('feishu_bot_secret', '签名校验密钥（没开就留空）', '', 'password') : '') + '</div>' +
-        (isAdmin ? '<div class="row"><button class="btn primary lg" type="submit">保存设置</button><span id="sErr" class="small" style="color:var(--red)"></span></div>' : '') + '</form>' +
+        '<div class="field"><label class="f" for="s_quote_bank_info">银行信息（可选，印在报价单底部）</label><textarea class="input" id="s_quote_bank_info" name="quote_bank_info" style="min-height:80px"' + dis + '>' + esc(v.quote_bank_info) + '</textarea></div></div>' +
+        '<div class="card"><h3>产品展示页</h3>' + inp('landing_contact', '首页「预约演示」按钮文字（不要放微信号、手机号）', '预约演示') + '</div>' +
+        (isAdmin ? '<div class="row" style="position:sticky;bottom:0;padding:12px 0;background:var(--bg)"><button class="btn primary lg" type="submit">保存设置</button><span id="sErr" class="small" style="color:var(--red)"></span></div>' : '') + '</form>' +
+
         '<div class="stack"><div class="card"><h3>系统状态</h3><div class="stack small">' +
         '<div class="row between"><span class="muted">大模型</span><span>' + esc(s.llm) + '</span></div>' +
         '<div class="row between"><span class="muted">业务邮箱</span><span>' + (s.mail ? esc(s.mail) : '<span class="dim">未配置（在 .env 填 IMAP_*）</span>') + '</span></div>' +
-        '<div class="row between"><span class="muted">飞书群推送</span><span>' + (s.feishu_bot ? '已开启' : '<span class="dim">未配置，只在站内提醒</span>') + '</span></div></div></div>' +
+        '<div class="row between"><span class="muted">飞书群推送</span><span>' + (s.feishu_bot ? '已开启' : '<span class="dim">未开启，只在站内提醒</span>') + '</span></div></div></div>' +
+        '<div class="card"><h3>密钥安全</h3><p class="small muted" style="margin:0;line-height:1.9">密钥保存在服务器自己的数据库里，页面上只显示掩码，任何人（包括管理员）都看不到原文。只有管理员能修改。<br>想更换密钥，直接填新的再保存；留空表示不修改。</p></div>' +
         '<div class="card"><h3>跟进节奏</h3><p class="small muted" style="margin:0;line-height:1.9">报价后按等级自动排下次跟进：<br>A 级：2 / 3 / 5 / 7 / 10 天<br>B 级：3 / 4 / 7 / 10 / 14 天<br>C 级：5 / 7 / 14 / 21 / 30 天<br>跟进 5 次没回复，自动标记为「已流失」。</p></div></div></div>';
+
+      function showHelp() {
+        var p = presets.filter(function (x) { return x.id === $('#s_preset').value; })[0];
+        $('#presetHelp').textContent = p ? p.help : '';
+      }
+      showHelp();
       if (!isAdmin) return;
-      $('#sForm').addEventListener('submit', function (e) {
-        e.preventDefault();
+
+      var form = $('#sForm');
+      var clear = [];
+      function formValues() {
         var vals = {};
-        $$('[name]', e.target).forEach(function (el) { vals[el.name] = el.value; });
-        var b = $('button[type=submit]', e.target); busy(b, true);
-        api('PUT', '/api/settings', { values: vals }).then(function () { busy(b, false); $('#sErr').textContent = ''; toast('设置已保存'); })
-          .catch(function (err) { busy(b, false); $('#sErr').textContent = err.message; });
+        $$('[name]', form).forEach(function (el) { vals[el.name] = el.value; });
+        return vals;
+      }
+      function msg(el, text, ok) { el.textContent = text; el.style.color = ok ? 'var(--green)' : 'var(--red)'; }
+
+      $('#s_preset').addEventListener('change', function (e) {
+        var p = presets.filter(function (x) { return x.id === e.target.value; })[0];
+        if (p && p.base_url) { $('#s_llm_base_url').value = p.base_url; $('#s_llm_model').value = p.model; }
+        if (p && p.id === 'custom') { $('#s_llm_base_url').value = ''; $('#s_llm_model').value = ''; $('#s_llm_base_url').focus(); }
+        showHelp(); $('#llmMsg').textContent = '';
       });
-      $('#sPush').addEventListener('click', function (e) {
-        var b = e.currentTarget; busy(b, true);
-        api('POST', '/api/settings/test-push', {}).then(function () { busy(b, false); toast('已发送，去「提醒」或飞书群看看'); }).catch(function (err) { busy(b, false); fail(err); });
+      $$('[data-clear]', form).forEach(function (b) {
+        b.addEventListener('click', function () {
+          var k = b.dataset.clear;
+          if (clear.indexOf(k) < 0) clear.push(k);
+          var input = $('#s_' + k);
+          input.value = ''; input.placeholder = '将在保存后清除'; b.remove();
+          toast('保存后生效');
+        });
+      });
+      $('#testLlm').addEventListener('click', function (e) {
+        var b = e.currentTarget, m = $('#llmMsg'); m.textContent = '';
+        busy(b, true, '测试中…');
+        api('POST', '/api/settings/test-llm', { values: formValues() }).then(function (r) {
+          busy(b, false); msg(m, '连接成功：' + r.model + '，响应 ' + (r.ms / 1000).toFixed(1) + ' 秒。别忘了保存。', true);
+        }).catch(function (err) { busy(b, false); msg(m, err.message, false); });
+      });
+      $('#testPush').addEventListener('click', function (e) {
+        var b = e.currentTarget, m = $('#pushMsg'), vals = formValues(); m.textContent = '';
+        busy(b, true, '发送中…');
+        api('POST', '/api/settings/test-push', { feishu_bot_webhook: vals.feishu_bot_webhook, feishu_bot_secret: vals.feishu_bot_secret }).then(function (r) {
+          busy(b, false); msg(m, r.where === 'feishu' ? '已发送，去飞书群看看' : '没填 Webhook，已发到站内「提醒」', true);
+        }).catch(function (err) { busy(b, false); msg(m, err.message, false); });
+      });
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var b = $('button[type=submit]', form); busy(b, true);
+        api('PUT', '/api/settings', { values: formValues(), clear: clear }).then(function () {
+          busy(b, false); toast('设置已保存，已生效'); route();
+        }).catch(function (err) { busy(b, false); $('#sErr').textContent = err.message; });
       });
       $('#sDaily').addEventListener('click', function (e) {
         var b = e.currentTarget; busy(b, true, '生成中');

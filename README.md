@@ -5,12 +5,17 @@
 ## 快速开始：网页系统（推荐，默认模式）
 
 ```bash
-cp .env.example .env      # 至少填 ADMIN_PASSWORD 和大模型 LLM_API_KEY
+cp .env.example .env      # 至少填 ADMIN_PASSWORD
 docker compose up -d --build
 docker compose exec waimao-assistant python scripts/seed_demo.py products   # 可选：写入演示产品
 ```
 
 打开 `http://服务器IP:8080/app`，用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录（没填密码的话，初始密码在 `docker compose logs` 里）。
+然后进「设置」：
+- **AI 大模型**：选服务商（DeepSeek / 通义千问 / 其他 OpenAI 兼容接口），填密钥，点「测试连接」，通过后保存，立即生效。
+- **飞书群推送**（可选）：粘贴群机器人 Webhook，点「发送测试消息」，保存。
+
+密钥保存在服务器自己的数据库里，页面只显示掩码，只有管理员能改。
 `http://服务器IP:8080/` 是公开的产品展示页。
 
 | 页面 | 能做什么 |
@@ -21,7 +26,7 @@ docker compose exec waimao-assistant python scripts/seed_demo.py products   # �
 | 产品库 | 增删改型号、单价、起订量、交期；CSV 批量导入 |
 | 报价记录 | 所有报价单，随时查看和下载 PDF |
 | 提醒 | 站内保存的每日跟进清单和 A 级询盘提醒（配了飞书群机器人会同时推送） |
-| 设置 | 公司信息、报价条款、银行信息、推送时间、飞书机器人（仅管理员可改） |
+| 设置 | AI 大模型（带测试连接）、飞书群推送（带测试消息）、公司信息、报价条款、银行信息、推送时间（仅管理员可改） |
 | 成员 | 新增业务员、重置密码、停用、设管理员（仅管理员） |
 
 - 数据存在 `data/waimao.db`（SQLite）和 `data/files/`（报价单 PDF），**备份这个 `data` 目录即可**。

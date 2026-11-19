@@ -43,11 +43,49 @@ class LLM:
 
 
 class OpenAICompatibleLLM(LLM):
-    def __init__(self, base_url: str, api_key: str, model: str):
+    def __init__(self, base_url: str, api_key: str, model: str, attempts: int = 3, timeout: int = 90):
         base = base_url.rstrip("/")
         self.url = base if base.endswith("/chat/completions") else base + "/chat/completions"
         self.api_key = api_key
         self.model = model
+        self.attempts = attempts
+        self.timeout = timeout
+
+    def probe(self) -> str:
+        """测试连接用：只请求一次，把服务端的报错原样返回，方便定位是密钥、地址还是模型名的问题。"""
+        body = {"model": self.model, "temperature": 0,
+                "messages": [{"role": "system", "content": "你只输出 JSON。"},
+                             {"role": "user", "content": '请输出 {"ok": true}'}]}
+        try:
+            r = requests.post(self.url, json=body, timeout=self.timeout,
+                              headers={"Authorization": f"Bearer {self.api_key}"})
+        except requests.exceptions.Timeout:
+            raise RuntimeError("连接超时，请检查接口地址，或服务器能否访问外网")
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"连不上接口地址：{type(e).__name__}")
+        if r.status_code == 401 or r.status_code == 403:
+            raise RuntimeError(f"密钥无效或没有权限（HTTP {r.status_code}）")
+        if r.status_code == 402:
+            raise RuntimeError("账户余额不足（HTTP 402），请先充值")
+        if r.status_code == 404:
+            raise RuntimeError("接口地址不对（HTTP 404），请检查 base_url")
+        if r.status_code >= 400:
+            try:
+                msg = r.json().get("error", {}).get("message") or r.text
+            except ValueError:
+                msg = r.text
+            raise RuntimeError(f"HTTP {r.status_code}：{str(msg)[:160]}")
+        try:
+            content = r.json()["choices"][0]["message"]["content"]
+        except (ValueError, KeyError, IndexError, TypeError):
+            raise RuntimeError("接口返回的格式不是 OpenAI 兼容格式，请检查 base_url")
+        try:
+            ok = parse_json(content).get("ok") is True
+        except Exception:
+            ok = False
+        if not ok:
+            raise RuntimeError(f"能连上，但模型没有按要求返回 JSON：{str(content)[:60]}")
+        return content
 
     def chat(self, system: str, user: str, *, json_mode: bool = True, temperature: float = 0.3) -> str:
         body: dict[str, Any] = {
@@ -57,9 +95,9 @@ class OpenAICompatibleLLM(LLM):
         }
         if json_mode:
             body["response_format"] = {"type": "json_object"}
-        for attempt in range(3):
+        for attempt in range(self.attempts):
             try:
-                r = requests.post(self.url, json=body, timeout=90,
+                r = requests.post(self.url, json=body, timeout=self.timeout,
                                   headers={"Authorization": f"Bearer {self.api_key}"})
                 if r.status_code == 400 and json_mode and "response_format" in body:
                     body.pop("response_format")  # 部分模型不支持 json_object，退回普通模式

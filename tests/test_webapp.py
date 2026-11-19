@@ -218,6 +218,105 @@ def test_settings_and_users(srv):
     assert "feishu_bot_secret" not in lily.req("GET", "/api/settings")[1]["values"]
 
 
+def _fake_llm_server(good_key="sk-good-key-123456"):
+    """一个最小的 OpenAI 兼容接口：密钥对返回 JSON，密钥错返回 401。"""
+    from http.server import BaseHTTPRequestHandler
+    calls = []
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            calls.append(body["model"])
+            if self.headers.get("Authorization") != f"Bearer {good_key}":
+                self.send_response(401); self.end_headers(); self.wfile.write(b'{"error":{"message":"bad key"}}'); return
+            if self.path != "/v1/chat/completions":
+                self.send_response(404); self.end_headers(); return
+            sys_prompt = body["messages"][0]["content"]
+            content = '{"ok": true}' if "只输出 JSON" in sys_prompt and "ok" in body["messages"][1]["content"] else \
+                json.dumps({"is_inquiry": True, "company": "Real Model Co", "level": "A", "summary": "真模型返回",
+                            "country": "德国", "products": "DS-450", "quantity": "5000", "level_reason": "x"})
+            out = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+
+    s = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    return s, f"http://127.0.0.1:{s.server_address[1]}/v1", calls
+
+
+def test_llm_and_feishu_config_page(srv, monkeypatch):
+    base, a, store = srv
+    from app.llm import MockLLM, OpenAICompatibleLLM
+    fake, url, calls = _fake_llm_server()
+    try:
+        c = Client(base)
+        c.login("boss", "boss-pass")
+        s = c.req("GET", "/api/settings")[1]
+        assert s["status"]["llm_ready"] is False and s["secrets"]["llm_api_key"] == ""
+        assert [p["id"] for p in s["presets"]] == ["deepseek", "qwen", "custom"]
+        # 测试连接：错误密钥 → 明确提示
+        code, d, _ = c.req("POST", "/api/settings/test-llm", {"values": {"llm_base_url": url, "llm_model": "m1",
+                                                                          "llm_api_key": "sk-wrong-key-999"}})
+        assert code == 400 and "密钥无效" in d["error"]
+        code, d, _ = c.req("POST", "/api/settings/test-llm", {"values": {"llm_base_url": url + "/xx", "llm_model": "m1",
+                                                                          "llm_api_key": "sk-good-key-123456"}})
+        assert code == 400 and "404" in d["error"]
+        assert c.req("POST", "/api/settings/test-llm", {"values": {"llm_base_url": url}})[0] == 400  # 缺密钥
+        # 测试连接：正确 → 成功（还没保存，系统仍是演示模式）
+        code, d, _ = c.req("POST", "/api/settings/test-llm", {"values": {"llm_base_url": url, "llm_model": "m1",
+                                                                          "llm_api_key": "sk-good-key-123456"}})
+        assert code == 200 and d["ok"] and isinstance(a.llm, MockLLM)
+        # 只填密钥不填模型 → 拒绝
+        assert c.req("PUT", "/api/settings", {"values": {"llm_base_url": "", "llm_model": "",
+                                                         "llm_api_key": "sk-good-key-123456"}})[0] == 400
+        a.cfg.llm_api_key = ""  # 上一步被拒绝，复原
+        # 保存 → 立即切换到真模型，接口只返回掩码
+        code, s, _ = c.req("PUT", "/api/settings", {"values": {"llm_base_url": url + "/", "llm_model": "m1",
+                                                               "llm_api_key": "sk-good-key-123456"}})
+        assert code == 200 and s["status"]["llm_ready"] and s["secrets"]["llm_api_key"] == "sk-****3456"
+        assert "sk-good-key-123456" not in json.dumps(s)
+        assert isinstance(a.llm, OpenAICompatibleLLM) and a.cfg.llm_base_url == url
+        lead = c.req("POST", "/api/leads", {"text": GERMANY})[1]["lead"]
+        assert lead["company"] == "Real Model Co" and lead["summary"] == "真模型返回"
+        # 密钥留空 = 不修改；测试连接也会用已保存的密钥
+        c.req("PUT", "/api/settings", {"values": {"llm_model": "m2", "llm_api_key": ""}})
+        assert store.get_settings()["llm_api_key"] == "sk-good-key-123456" and a.cfg.llm_model == "m2"
+        assert c.req("POST", "/api/settings/test-llm", {"values": {"llm_api_key": ""}})[0] == 200
+        assert calls[-1] == "m2"
+        # 业务员看不到任何密钥和地址
+        lily = Client(base)
+        lily.login("lily", "lily-pass")
+        ls = lily.req("GET", "/api/settings")[1]
+        assert "sk-" not in json.dumps(ls) and ls["values"]["llm_base_url"] == "已配置"
+        assert lily.req("POST", "/api/settings/test-llm", {"values": {}})[0] == 403
+        # 清除密钥 → 回到演示模式
+        c.req("PUT", "/api/settings", {"values": {}, "clear": ["llm_api_key"]})
+        assert isinstance(a.llm, MockLLM) and store.get_settings()["llm_api_key"] == ""
+        # 重启后从数据库读取配置
+        from app.main import build_assistant
+        cfg2 = type(a.cfg)()
+        cfg2.data_dir, cfg2.storage = a.cfg.data_dir, "sqlite"
+        c.req("PUT", "/api/settings", {"values": {"llm_api_key": "sk-good-key-123456"}})
+        assert isinstance(build_assistant(cfg2).llm, OpenAICompatibleLLM)
+    finally:
+        fake.shutdown()
+
+    # 飞书：先用表单里的新地址测试，再保存
+    sent = []
+    monkeypatch.setattr("app.feishu.FeishuClient.send_card",
+                        lambda self, title, md, template="blue", button=None: sent.append((self.bot_webhook, self.bot_secret, title)))
+    hook = "https://open.feishu.cn/open-apis/bot/v2/hook/abc123"
+    assert c.req("POST", "/api/settings/test-push", {"feishu_bot_webhook": "https://evil.example/x"})[0] == 400
+    code, d, _ = c.req("POST", "/api/settings/test-push", {"feishu_bot_webhook": hook, "feishu_bot_secret": "sec-123456789"})
+    assert code == 200 and d["where"] == "feishu" and sent[-1][:2] == (hook, "sec-123456789")
+    s = c.req("PUT", "/api/settings", {"values": {"feishu_bot_webhook": hook, "feishu_bot_secret": "sec-123456789"}})[1]
+    assert s["status"]["feishu_bot"] and s["secrets"]["feishu_bot_secret"] == "sec****6789"
+    assert "feishu_bot_secret" not in s["values"]
+
+
 def test_admin_can_delete_and_legacy_paste_still_works(srv):
     base, a, store = srv
     c = Client(base)

@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from . import schema as S
-from .config import EDITABLE_SETTINGS, apply_settings
+from .config import EDITABLE_SETTINGS, LLM_PRESETS, SECRET_SETTINGS, apply_settings, mask_secret
 from .feishu import ms, num_of, text_of
 
 LEAD_FIELDS = {  # 接口字段名 -> 表字段名
@@ -112,6 +112,7 @@ class Api:
         r("GET", r"/api/settings", self.settings_get, "user")
         r("PUT", r"/api/settings", self.settings_put, "admin")
         r("POST", r"/api/settings/test-push", self.test_push, "admin")
+        r("POST", r"/api/settings/test-llm", self.test_llm, "admin")
         r("POST", r"/api/tasks/check-mail", self.task_mail, "user")
         r("POST", r"/api/tasks/daily", self.task_daily, "admin")
         r("GET", r"/api/users", self.users, "admin")
@@ -403,34 +404,88 @@ class Api:
 
     # ------------------------------------------------------------- settings
     def settings_get(self, user, **_):
-        values = {k: getattr(self.cfg, k) for k in EDITABLE_SETTINGS}
-        if user["role"] != "admin":
-            values.pop("feishu_bot_secret", None)
-            values["feishu_bot_webhook"] = "已配置" if self.cfg.feishu_bot_webhook else ""
         from .llm import MockLLM
-        return 200, {"values": values, "status": {
+        values = {k: getattr(self.cfg, k) for k in EDITABLE_SETTINGS if k not in SECRET_SETTINGS}
+        secrets = {k: mask_secret(getattr(self.cfg, k)) for k in SECRET_SETTINGS}  # 只给掩码，永不返回原文
+        if user["role"] != "admin":
+            for k in ("feishu_bot_webhook", "llm_base_url"):
+                values[k] = "已配置" if values.get(k) else ""
+            secrets = {k: ("已配置" if v else "") for k, v in secrets.items()}
+        return 200, {"values": values, "secrets": secrets, "presets": LLM_PRESETS, "status": {
             "mail": f"{self.cfg.imap_user} @ {self.cfg.imap_host}" if self.cfg.mail_enabled else "",
-            "llm": "演示模式（未配置大模型 Key）" if isinstance(self.a.llm, MockLLM) else self.cfg.llm_model,
+            "llm": "演示模式（未配置大模型密钥）" if isinstance(self.a.llm, MockLLM) else self.cfg.llm_model,
+            "llm_ready": not isinstance(self.a.llm, MockLLM),
             "feishu_bot": bool(self.cfg.feishu_bot_webhook),
         }}
 
+    def _merge_secrets(self, values: dict, clear: list) -> dict:
+        """密钥字段留空 = 不修改；放进 clear 列表才清空。"""
+        values = dict(values)
+        for k in SECRET_SETTINGS:
+            if k in clear:
+                values[k] = ""
+            elif not str(values.get(k) or "").strip():
+                values.pop(k, None)
+        return values
+
     def settings_put(self, body, **_):
+        values = self._merge_secrets(body.get("values") or {}, body.get("clear") or [])
         try:
-            clean = apply_settings(self.cfg, body.get("values") or {})
+            clean = apply_settings(self.cfg, values)
         except ValueError as e:
             raise ApiError(400, str(e))
+        if self.cfg.llm_api_key and not (self.cfg.llm_base_url and self.cfg.llm_model):
+            raise ApiError(400, "填了大模型密钥，就必须同时填接口地址和模型名")
         self.store.set_settings(clean)
         if self.store.bot_sender is not None:
             self.store.bot_sender.bot_webhook = self.cfg.feishu_bot_webhook
             self.store.bot_sender.bot_secret = self.cfg.feishu_bot_secret
+        if {"llm_base_url", "llm_api_key", "llm_model"} & set(clean):
+            from .llm import build_llm
+            self.a.llm = build_llm(self.cfg)  # 立即生效，无需重启
         return self.settings_get(user={"role": "admin"})
 
-    def test_push(self, **_):
+    def test_llm(self, body, **_):
+        """用表单里还没保存的值测试；密钥留空则用已保存的密钥。"""
+        from .llm import OpenAICompatibleLLM
+        v = body.get("values") or {}
+        base = str(v.get("llm_base_url") or self.cfg.llm_base_url or "").strip().rstrip("/")
+        model = str(v.get("llm_model") or self.cfg.llm_model or "").strip()
+        key = str(v.get("llm_api_key") or "").strip() or self.cfg.llm_api_key
+        if not (base and model and key):
+            raise ApiError(400, "请先填写接口地址、模型名和密钥")
+        try:
+            apply_settings(type(self.cfg)(), {"llm_base_url": base, "llm_model": model, "llm_api_key": key})
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        t0 = time.time()
+        try:
+            OpenAICompatibleLLM(base, key, model, attempts=1, timeout=30).probe()
+        except RuntimeError as e:
+            raise ApiError(400, f"连接失败：{e}")
+        return 200, {"ok": True, "model": model, "ms": int((time.time() - t0) * 1000)}
+
+    def test_push(self, body, **_):
+        """有表单里的新地址就用新地址测试，否则用已保存的。"""
+        hook = str(body.get("feishu_bot_webhook") or "").strip()
+        if hook:
+            from .feishu import FeishuClient
+            try:
+                apply_settings(type(self.cfg)(), {"feishu_bot_webhook": hook})
+            except ValueError as e:
+                raise ApiError(400, str(e))
+            secret = str(body.get("feishu_bot_secret") or "").strip() or self.cfg.feishu_bot_secret
+            try:
+                FeishuClient("", "", "", bot_webhook=hook, bot_secret=secret).send_card(
+                    "外贸订单助手连接成功", "这是一条测试消息，飞书群推送配置正确。", template="green")
+            except Exception as e:
+                raise ApiError(400, f"飞书推送失败：{e}")
+            return 200, {"ok": True, "where": "feishu"}
         try:
             self.store.send_card("外贸订单助手连接成功", "这是一条测试提醒。", template="green")
         except Exception as e:
             raise ApiError(400, f"站内提醒已保存，但飞书推送失败：{e}")
-        return 200, {"ok": True}
+        return 200, {"ok": True, "where": "feishu" if self.cfg.feishu_bot_webhook else "inbox"}
 
     def task_mail(self, **_):
         if not self.cfg.mail_enabled:

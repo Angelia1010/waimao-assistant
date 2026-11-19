@@ -102,7 +102,27 @@ EDITABLE_SETTINGS: dict[str, type] = {
     "quote_currency": str, "quote_incoterm": str, "quote_payment_terms": str, "quote_validity_days": int,
     "quote_bank_info": str, "followup_time": str, "feishu_bot_webhook": str, "feishu_bot_secret": str,
     "landing_contact": str,
+    "llm_base_url": str, "llm_api_key": str, "llm_model": str,
 }
+# 密钥类配置：接口永远不返回原文，只返回掩码；提交空值表示“不修改”
+SECRET_SETTINGS = {"llm_api_key", "feishu_bot_secret"}
+
+# 常用大模型的预设（网页设置里的下拉选项）
+LLM_PRESETS = [
+    {"id": "deepseek", "name": "DeepSeek", "base_url": "https://api.deepseek.com", "model": "deepseek-v4-flash",
+     "help": "platform.deepseek.com → API Keys 创建密钥"},
+    {"id": "qwen", "name": "通义千问（阿里云百炼）", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+     "model": "qwen-plus", "help": "百炼控制台 → API Key；不同地域的地址不同，以控制台显示的为准"},
+    {"id": "custom", "name": "其他 OpenAI 兼容接口", "base_url": "", "model": "",
+     "help": "Kimi、智谱、豆包、硅基流动等，填它们文档里的 base_url 和模型名"},
+]
+
+
+def mask_secret(v: str) -> str:
+    v = v or ""
+    if not v:
+        return ""
+    return (v[:3] + "****" + v[-4:]) if len(v) > 10 else "****"
 
 
 def apply_settings(cfg: Config, values: dict) -> dict:
@@ -127,6 +147,12 @@ def apply_settings(cfg: Config, values: dict) -> dict:
             if k == "feishu_bot_webhook" and v and not v.startswith(
                     ("https://open.feishu.cn/open-apis/bot/", "https://open.larksuite.com/open-apis/bot/")):
                 raise ValueError("飞书机器人地址应以 https://open.feishu.cn/open-apis/bot/ 开头")
+            if k == "llm_base_url" and v and not re.match(r"https?://[^\s/]+", v):
+                raise ValueError("大模型接口地址应以 https:// 开头")
+            if k == "llm_base_url":
+                v = v.rstrip("/")
+            if k in ("llm_api_key", "llm_model", "feishu_bot_secret") and (len(v) > 300 or re.search(r"\s", v)):
+                raise ValueError("密钥或模型名里不能有空格或换行，请检查是否复制完整")
         setattr(cfg, k, v)
         clean[k] = v
     return clean
