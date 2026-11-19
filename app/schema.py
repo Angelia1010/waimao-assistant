@@ -95,11 +95,14 @@ TABLES: dict[str, list[dict]] = {
         {"field_name": "金额合计", "type": NUMBER, "property": {"formatter": "0.00"}},
         {"field_name": "报价明细", "type": TEXT},
         {"field_name": "PDF", "type": ATTACHMENT},
+        {"field_name": "线索ID", "type": TEXT},
     ],
     T_FOLLOWUPS: [
         {"field_name": "客户公司", "type": TEXT},
         {"field_name": "跟进时间", "type": DATETIME, "property": {"date_formatter": "yyyy/MM/dd HH:mm"}},
         {"field_name": "第几次跟进", "type": NUMBER, "property": {"formatter": "0"}},
         {"field_name": "使用的话术", "type": TEXT},
+        {"field_name": "线索ID", "type": TEXT},
+        {"field_name": "操作人", "type": TEXT},
     ],
 }

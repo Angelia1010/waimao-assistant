@@ -60,6 +60,12 @@ class Config:
     data_dir: str = field(default_factory=lambda: _get("DATA_DIR", "./data"))
     # 产品展示页底部按钮的文字（不要放微信号/手机号，避免录屏发小红书时违规）
     landing_contact: str = field(default_factory=lambda: _get("LANDING_CONTACT", "预约演示"))
+    # sqlite = 自带数据库 + 网页系统（推荐）；feishu = 旧版，用飞书多维表格当数据库
+    storage: str = field(default_factory=lambda: _get("STORAGE", "sqlite").lower())
+    admin_username: str = field(default_factory=lambda: _get("ADMIN_USERNAME", "admin"))
+    admin_password: str = field(default_factory=lambda: _get("ADMIN_PASSWORD"))
+    # 用 HTTPS 访问时设为 true，登录 Cookie 只走加密连接
+    cookie_secure: bool = field(default_factory=lambda: _get("COOKIE_SECURE", "false").lower() == "true")
 
     # ---- 公司信息（打印在报价单上）----
     company_name_en: str = field(default_factory=lambda: _get("COMPANY_NAME_EN", "Demo Hardware Co., Ltd."))
@@ -87,3 +93,40 @@ class Config:
 
 def load_config() -> Config:
     return Config()
+
+
+# 可以在网页「设置」里修改、保存在数据库里的配置项（会覆盖 .env 里的同名值）
+EDITABLE_SETTINGS: dict[str, type] = {
+    "company_name_en": str, "company_name_cn": str, "company_address": str, "company_contact": str,
+    "company_email": str, "company_phone": str, "company_website": str,
+    "quote_currency": str, "quote_incoterm": str, "quote_payment_terms": str, "quote_validity_days": int,
+    "quote_bank_info": str, "followup_time": str, "feishu_bot_webhook": str, "feishu_bot_secret": str,
+    "landing_contact": str,
+}
+
+
+def apply_settings(cfg: Config, values: dict) -> dict:
+    """校验并写入 cfg，返回清洗后的值。"""
+    import re
+    clean = {}
+    for k, v in values.items():
+        if k not in EDITABLE_SETTINGS:
+            continue
+        typ = EDITABLE_SETTINGS[k]
+        if typ is int:
+            try:
+                v = int(v)
+            except (TypeError, ValueError):
+                raise ValueError(f"{k} 必须是整数")
+            if not 1 <= v <= 365:
+                raise ValueError("报价有效期要在 1–365 天之间")
+        else:
+            v = str(v or "").strip()
+            if k == "followup_time" and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v):
+                raise ValueError("推送时间格式应为 HH:MM，例如 09:00")
+            if k == "feishu_bot_webhook" and v and not v.startswith(
+                    ("https://open.feishu.cn/open-apis/bot/", "https://open.larksuite.com/open-apis/bot/")):
+                raise ValueError("飞书机器人地址应以 https://open.feishu.cn/open-apis/bot/ 开头")
+        setattr(cfg, k, v)
+        clean[k] = v
+    return clean

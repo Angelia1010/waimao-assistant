@@ -128,7 +128,10 @@ class MockLLM(LLM):
         if any(w in low for w in _SPAM_WORDS):
             return {"is_inquiry": False, "company": "", "contact": "", "email": email, "country": "", "products": "",
                     "quantity": "", "budget": "", "summary": "推广/垃圾邮件", "level": "C", "level_reason": "非询盘"}
-        country = next((v for k, v in _COUNTRY_HINTS.items() if k in low), "")
+        domain = email.split("@")[-1].lower() if email else ""
+        country = next((v for k, v in _COUNTRY_HINTS.items()
+                        if (k.startswith(".") and (domain.endswith(k) or re.search(re.escape(k) + r"(?![a-z0-9.-])", low)))
+                        or (not k.startswith(".") and k in low)), "")
         name_m = re.search(r"^\s*([A-Z][^<\n]+?)\s*<", sender)
         contact = name_m.group(1).strip() if name_m else ""
         comp_m = re.search(r"\n\s*([A-Z][\w&.,' -]+(?:GmbH|Ltd\.?|LLC|Inc\.?|S\.?A\.?S?|S\.?r\.?l\.?|Pty Ltd|B\.V\.|Co\.?|Trading|Group|Supplies|Import))",

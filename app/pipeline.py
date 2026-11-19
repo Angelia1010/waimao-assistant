@@ -74,7 +74,7 @@ class Assistant:
         return "\n".join(f"{p.model} | {p.name} | {p.spec} | {p.moq:g}" for p in products)
 
     # ------------------------------------------------------- 1. 询盘入库分级
-    def ingest(self, msg: dict, source: str = "邮箱") -> str | None:
+    def ingest(self, msg: dict, source: str = "邮箱", owner: str = "") -> str | None:
         """msg: {msg_id, sender, subject, body, date}。返回新建的记录ID；不是询盘返回 None。"""
         msg_id = msg.get("msg_id") or ""
         if msg_id and self.state.seen(msg_id):
@@ -111,6 +111,7 @@ class Assistant:
             S.F_FOLLOW_COUNT: 0,
             S.F_RAW: (f"主题：{msg.get('subject', '')}\n\n" if msg.get("subject") else "") + msg.get("body", "")[:4000],
             S.F_MSG_ID: msg_id,
+            S.F_OWNER: owner,
         }
         rid = self.fs.create_record(S.T_LEADS, fields)
         log.info("新询盘入库：%s [%s]", company, level)
@@ -122,9 +123,10 @@ class Assistant:
                             template="red")
         return rid
 
-    def ingest_text(self, text: str, source: str = "其他", sender: str = "") -> str | None:
+    def ingest_text(self, text: str, source: str = "其他", sender: str = "", owner: str = "") -> str | None:
         """手动粘贴的询盘（阿里国际站、WhatsApp、展会名片等）。"""
-        return self.ingest({"msg_id": "", "sender": sender, "subject": "", "body": text, "date": None}, source=source)
+        return self.ingest({"msg_id": "", "sender": sender, "subject": "", "body": text, "date": None},
+                           source=source, owner=owner)
 
     # --------------------------------------------------------- 2. 生成报价单
     def generate_quote(self, record_id: str) -> dict:
@@ -193,9 +195,11 @@ class Assistant:
             "金额合计": quote.total,
             "报价明细": "\n".join(f"{i.model} × {i.qty:,.0f} @ {i.unit_price:.2f} = {i.amount:,.2f}" for i in items),
             "PDF": [{"file_token": token}],
+            "线索ID": record_id,
         })
         log.info("已生成报价单 %s → %s", quote.quote_no, company)
-        return {"quote_no": quote.quote_no, "total": quote.total, "pdf": str(pdf), "email": email_draft}
+        return {"quote_no": quote.quote_no, "total": quote.total, "pdf": str(pdf), "email": email_draft,
+                "file_token": token}
 
     def seller(self) -> Seller:
         c = self.cfg
@@ -220,28 +224,33 @@ class Assistant:
         level_rank = {"A": 0, "B": 1, "C": 2}
         due.sort(key=lambda r: (level_rank.get(text_of(r["fields"].get(S.F_LEVEL)), 3),
                                 num_of(r["fields"].get(S.F_NEXT_AT))))
-        results = []
-        for r in due:
-            f = r["fields"]
-            count = int(num_of(f.get(S.F_FOLLOW_COUNT)))
-            last = num_of(f.get(S.F_LAST_AT), default=now_ms)
-            days = max(0, int((now_ms - last) / 86400000))
-            draft = self.llm.chat_json(prompts.FOLLOWUP_SYSTEM, prompts.FOLLOWUP_USER.format(
-                company=text_of(f.get(S.F_COMPANY)), country=text_of(f.get(S.F_COUNTRY)),
-                contact=text_of(f.get(S.F_CONTACT)) or "there", level=text_of(f.get(S.F_LEVEL)),
-                summary=text_of(f.get(S.F_SUMMARY)), count=count, days=days,
-                chat_log=text_of(f.get(S.F_CHAT_LOG))[-2000:] or "（无）"), temperature=0.6)
-            msg = str(draft.get("message_en", "")).strip()
-            tip = str(draft.get("tip_cn", "")).strip()
-            action = str(draft.get("action", "继续跟进"))
-            self.fs.update_record(S.T_LEADS, r["record_id"], {S.F_FOLLOW_DRAFT: f"{msg}\n\n💡 {tip}"})
-            results.append({"record_id": r["record_id"], "company": text_of(f.get(S.F_COMPANY)),
-                            "country": text_of(f.get(S.F_COUNTRY)), "level": text_of(f.get(S.F_LEVEL)),
-                            "count": count, "days": days, "message": msg, "tip": tip, "action": action})
-
+        results = [self._draft(r) for r in due]
         if push:
             self._push_followup_card(results, to_quote)
         return results
+
+    def _draft(self, r: dict) -> dict:
+        """给一个客户写下一次跟进话术，并写回「跟进话术」字段。"""
+        f = r["fields"]
+        now_ms = ms(time.time())
+        count = int(num_of(f.get(S.F_FOLLOW_COUNT)))
+        last = num_of(f.get(S.F_LAST_AT), default=now_ms)
+        days = max(0, int((now_ms - last) / 86400000))
+        draft = self.llm.chat_json(prompts.FOLLOWUP_SYSTEM, prompts.FOLLOWUP_USER.format(
+            company=text_of(f.get(S.F_COMPANY)), country=text_of(f.get(S.F_COUNTRY)),
+            contact=text_of(f.get(S.F_CONTACT)) or "there", level=text_of(f.get(S.F_LEVEL)),
+            summary=text_of(f.get(S.F_SUMMARY)), count=count, days=days,
+            chat_log=text_of(f.get(S.F_CHAT_LOG))[-2000:] or "（无）"), temperature=0.6)
+        msg = str(draft.get("message_en", "")).strip()
+        tip = str(draft.get("tip_cn", "")).strip()
+        action = str(draft.get("action", "继续跟进"))
+        self.fs.update_record(S.T_LEADS, r["record_id"], {S.F_FOLLOW_DRAFT: f"{msg}\n\n💡 {tip}"})
+        return {"record_id": r["record_id"], "company": text_of(f.get(S.F_COMPANY)),
+                "country": text_of(f.get(S.F_COUNTRY)), "level": text_of(f.get(S.F_LEVEL)),
+                "count": count, "days": days, "message": msg, "tip": tip, "action": action}
+
+    def draft_followup(self, record_id: str) -> dict:
+        return self._draft(self.fs.get_record(S.T_LEADS, record_id))
 
     def _push_followup_card(self, results: list[dict], to_quote: list[dict]) -> None:
         today = self.now().strftime("%m月%d日")
@@ -264,7 +273,7 @@ class Assistant:
                         button=("打开客户表", self.cfg.bitable_url))
 
     # ------------------------------------------------------- 4. 记录已跟进
-    def mark_followed(self, record_id: str) -> None:
+    def mark_followed(self, record_id: str, operator: str = "") -> None:
         rec = self.fs.get_record(S.T_LEADS, record_id)
         f = rec["fields"]
         count = int(num_of(f.get(S.F_FOLLOW_COUNT))) + 1
@@ -287,7 +296,8 @@ class Assistant:
             updates[S.F_NEXT_AT] = now_ms + next_interval(level, count) * 86400 * 1000
         self.fs.update_record(S.T_LEADS, record_id, updates)
         self.fs.create_record(S.T_FOLLOWUPS, {"客户公司": text_of(f.get(S.F_COMPANY)), "跟进时间": now_ms,
-                                              "第几次跟进": count, "使用的话术": draft})
+                                              "第几次跟进": count, "使用的话术": draft, "线索ID": record_id,
+                                              "操作人": operator})
 
     # ------------------------------------------------------ 轮询：复选框触发
     def process_checkboxes(self) -> dict:
