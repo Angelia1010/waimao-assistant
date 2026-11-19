@@ -39,7 +39,7 @@ class Config:
     llm_provider: str = field(default_factory=lambda: _get("LLM_PROVIDER", "openai_compatible"))
     llm_base_url: str = field(default_factory=lambda: _get("LLM_BASE_URL", "https://api.deepseek.com"))
     llm_api_key: str = field(default_factory=lambda: _get("LLM_API_KEY"))
-    llm_model: str = field(default_factory=lambda: _get("LLM_MODEL", "deepseek-chat"))
+    llm_model: str = field(default_factory=lambda: _get("LLM_MODEL", "deepseek-v4-flash"))
 
     # ---- 邮箱（IMAP）----
     imap_host: str = field(default_factory=lambda: _get("IMAP_HOST"))

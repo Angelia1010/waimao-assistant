@@ -74,8 +74,8 @@ docker compose exec waimao-assistant python scripts/seed_demo.py products   # �
 
 ### 4. 准备大模型 API Key
 任何 OpenAI 兼容接口都可以，推荐国内直接能用的：
-- DeepSeek：`LLM_BASE_URL=https://api.deepseek.com`，`LLM_MODEL=deepseek-chat`
-- 通义千问：`LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`，`LLM_MODEL=qwen-plus`
+- DeepSeek（推荐）：`LLM_BASE_URL=https://api.deepseek.com`，`LLM_MODEL=deepseek-v4-flash`（旧名 deepseek-chat 已于 2026-07-24 弃用）
+- 通义千问：`LLM_BASE_URL` 从阿里云百炼控制台复制（不同地域地址不同），`LLM_MODEL=qwen-plus`
 
 ### 5.（可选）业务邮箱开启 IMAP
 在企业邮箱设置里开启 IMAP，并生成**客户端专用密码/授权码**。常见服务器：
