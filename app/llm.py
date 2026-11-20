@@ -137,6 +137,8 @@ class MockLLM(LLM):
             return self._quote_email(user)
         if system == prompts.FOLLOWUP_SYSTEM:
             return json.dumps(self._followup(user), ensure_ascii=False)
+        if system == prompts.DOC_FIX_SYSTEM:
+            return ""  # 演示模式用内置模板写更正消息
         return "{}"
 
     @staticmethod

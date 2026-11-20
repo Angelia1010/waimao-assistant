@@ -153,4 +153,43 @@ details.raw summary{cursor:pointer;color:var(--muted);font-size:13px;min-height:
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes slide{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}
 @keyframes rot{to{transform:rotate(360deg)}}
+
+/* 单证核对 */
+.dc-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:28px 16px;border:1.5px dashed var(--line2);border-radius:var(--r);background:rgba(79,140,255,.04);cursor:pointer;transition:.15s}
+.dc-drop:hover,.dc-drop.on{border-color:var(--blue);background:rgba(79,140,255,.1)}
+.dc-ico{width:52px;height:52px;border-radius:14px;background:rgba(79,140,255,.16);color:var(--blue2);display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.dc-files{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.dc-file,.dc-doc{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);min-width:0}
+.dc-tag{flex:none;font-size:12px;font-weight:700;padding:1px 8px;border-radius:6px;background:rgba(79,140,255,.18);color:var(--blue2)}
+.icon-btn{border:0;background:transparent;color:var(--dim);cursor:pointer;padding:4px;border-radius:6px;display:flex}.icon-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.dc-scan{margin-top:14px}
+.dc-bar{height:4px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;margin-bottom:14px}
+.dc-bar i{display:block;height:100%;width:40%;background:linear-gradient(90deg,transparent,var(--blue),transparent);animation:dcscan 1s linear infinite}
+@keyframes dcscan{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+.dc-step{display:flex;align-items:center;gap:8px;color:var(--muted);padding:3px 0;opacity:0;animation:rise .35s ease forwards}
+.dc-step svg{color:var(--green)}
+.dc-report{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.dc-sum{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:var(--r);border:1px solid}
+.dc-sum.bad{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.45)}
+.dc-sum.ok{background:rgba(61,220,151,.1);border-color:rgba(61,220,151,.45)}
+.dc-sum b{font-size:18px}
+.dc-big{font-size:44px;font-weight:800;line-height:1;min-width:48px;text-align:center}
+.dc-sum.bad .dc-big{color:var(--red)}.dc-sum.ok .dc-big{color:var(--green)}
+.dc-docs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.dc-doc.err{border-color:rgba(255,107,107,.5)}.dc-doc.err .small{color:var(--red)}
+.dc-issue{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--red);border-radius:var(--r);padding:14px 16px}
+.dc-issue>.row b{font-size:15px;display:flex;align-items:center;gap:8px}
+.dc-no{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;font-size:12.5px;flex:none}
+.dc-wrong{flex:none;font-size:12px;font-weight:700;color:var(--red);background:rgba(255,107,107,.12);padding:2px 8px;border-radius:6px}
+.dc-vals{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px}
+.dc-val{display:flex;flex-direction:column;padding:8px 10px;border-radius:9px;background:var(--panel2);border:1px solid var(--line)}
+.dc-val b{font-size:15px}
+.dc-val.bad{background:rgba(255,107,107,.14);border-color:rgba(255,107,107,.6)}.dc-val.bad b{color:#FF8A8A}
+.dc-note{margin-top:10px;font-size:13px;color:var(--amber)}
+.dc-mail pre{white-space:pre-wrap;margin:12px 0 0;font:inherit;font-size:13.5px;line-height:1.75;background:var(--panel2);border-radius:10px;padding:12px 14px;color:var(--text)}
+.dc-h{padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}.dc-h:last-child{border-bottom:0}.dc-h:hover{background:rgba(255,255,255,.02)}
+.dc-cnt{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.dc-cnt.bad{background:rgba(255,107,107,.16);color:var(--red)}.dc-cnt.ok{background:rgba(61,220,151,.14);color:var(--green)}
+@media (max-width:600px){.dc-vals{grid-template-columns:repeat(2,minmax(0,1fr))}.dc-docs{grid-template-columns:minmax(0,1fr)}.dc-sum{padding:16px}.dc-big{font-size:38px}.dc-issue>.row{flex-wrap:wrap;gap:6px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+#dcResult,.dc-issue,.dc-mail{scroll-margin-top:66px}

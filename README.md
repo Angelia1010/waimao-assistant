@@ -25,6 +25,7 @@ docker compose exec waimao-assistant python scripts/seed_demo.py products   # �
 | 录入询盘 | 粘贴阿里国际站、WhatsApp、展会的询盘原文，AI 提取并分级（邮箱询盘自动收取） |
 | 产品库 | 增删改型号、单价、起订量、交期；CSV 批量导入 |
 | 报价记录 | 所有报价单，随时查看和下载 PDF |
+| 单证核对 | 一次上传 PI、商业发票、装箱单、报关资料（PDF 文字版 / Excel / Word / CSV，2–8 份），交叉核对每个型号的数量、单价、金额、HS 编码，以及总箱数、总毛重 / 净重、收货人、币种、成交方式；再做单据自检（净重大于毛重、数量×单价≠金额、装箱率×箱数≠数量、报关 HS 不是 10 位）。每处问题列出各单据的值并指出可能写错的那份，附一段可直接发给货代 / 报关行的更正消息。比对全部由代码完成，大模型只用来读不规则单据和写更正消息。演示单据：`python scripts/make_demo_docs.py` |
 | 提醒 | 站内保存的每日跟进清单和 A 级询盘提醒（配了飞书群机器人会同时推送） |
 | 设置 | AI 大模型（带测试连接）、飞书群推送（带测试消息）、公司信息、报价条款、银行信息、推送时间（仅管理员可改） |
 | 成员 | 新增业务员、重置密码、停用、设管理员（仅管理员） |
@@ -53,7 +54,7 @@ docker compose exec waimao-assistant python scripts/seed_demo.py products   # �
                  └──────────> 飞书群机器人（A级询盘提醒 / 每日跟进卡片）
 ```
 
-- 纯 Python，依赖只有 `requests`、`reportlab`、`python-dotenv`。
+- 纯 Python，依赖只有 `requests`、`reportlab`、`python-dotenv`；单证核对另需 `pdfplumber`、`openpyxl`、`python-docx`（都在 requirements.txt 里）。
 - 勾选触发靠后台每 30 秒检查一次表格，**不需要在飞书里配置自动化流程**。
 - 没配大模型 Key 时自动使用“规则版 mock”，可以先跑通流程录演示，正式用请换真模型。
 

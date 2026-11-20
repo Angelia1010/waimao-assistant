@@ -106,3 +106,5 @@ TABLES: dict[str, list[dict]] = {
         {"field_name": "操作人", "type": TEXT},
     ],
 }
+
+T_DOCCHECK = "单证核对"  # 只在网页系统（SQLite）里用，飞书模式不建这张表

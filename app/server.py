@@ -33,6 +33,7 @@ LANDING_PAGE = STATIC / "index.html"
 APP_DIR = STATIC / "app"
 COOKIE = "wm_session"
 MAX_BODY = 2 * 1024 * 1024
+MAX_UPLOAD = 30 * 1024 * 1024  # 单证核对：最多 8 份、每份 5MB，base64 后约大 1/3
 
 PASTE_PAGE = """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -79,7 +80,8 @@ def make_handler(assistant, worker):
 
         def _raw_body(self) -> str:
             n = int(self.headers.get("Content-Length") or 0)
-            if n > MAX_BODY:
+            limit = MAX_UPLOAD if urlparse(self.path).path == "/api/doccheck" else MAX_BODY
+            if n > limit:
                 raise ApiError(413, "请求内容太大")
             return self.rfile.read(n).decode("utf-8") if n else ""
 

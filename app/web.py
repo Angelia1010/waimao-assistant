@@ -109,6 +109,9 @@ class Api:
         r("POST", r"/api/products/import", self.product_import, "user")
         r("GET", r"/api/quotes", self.quotes, "user")
         r("GET", r"/api/notifications", self.notifications, "user")
+        r("POST", r"/api/doccheck", self.doccheck_run, "user")
+        r("GET", r"/api/doccheck", self.doccheck_list, "user")
+        r("GET", r"/api/doccheck/(?P<id>rec\w+)", self.doccheck_get, "user")
         r("GET", r"/api/settings", self.settings_get, "user")
         r("PUT", r"/api/settings", self.settings_put, "admin")
         r("POST", r"/api/settings/test-push", self.test_push, "admin")
@@ -401,6 +404,42 @@ class Api:
 
     def notifications(self, **_):
         return 200, {"items": self.store.notifications()}
+
+    # ------------------------------------------------------------ 单证核对
+    def doccheck_run(self, user, body, **_):
+        from . import doccheck
+        try:
+            files = doccheck.decode_files(body.get("files"))
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        report = doccheck.run_check(self.a.llm, files)
+        if not any(d["items"] for d in report["docs"]):
+            bad = next((d for d in report["docs"] if d["error"]), None)
+            raise ApiError(400, f"没能读出单据内容：{bad['name']} {bad['error']}" if bad else "没能读出单据内容")
+        rid = self.store.create_record(S.T_DOCCHECK, {
+            "文件": "、".join(d["name"] for d in report["docs"]), "问题数": len(report["issues"]),
+            "操作人": user["name"], "时间": ms(time.time()), "报告": doccheck.report_json(report)})
+        report["id"] = rid
+        return 200, report
+
+    def doccheck_list(self, **_):
+        items = []
+        for r in self.store.search(S.T_DOCCHECK, field_names=["文件", "问题数", "操作人", "时间"]):
+            f = r["fields"]
+            items.append({"id": r["record_id"], "files": text_of(f.get("文件")), "issues": int(num_of(f.get("问题数"))),
+                          "by": text_of(f.get("操作人")), "at": num_of(f.get("时间"))})
+        items.sort(key=lambda x: -x["at"])
+        return 200, {"items": items[:30]}
+
+    def doccheck_get(self, id, **_):
+        import json as _json
+        try:
+            r = self.store.get_record(S.T_DOCCHECK, id)
+        except KeyError:
+            raise ApiError(404, "记录不存在")
+        report = _json.loads(r["fields"].get("报告") or "{}")
+        report["id"] = id
+        return 200, report
 
     # ------------------------------------------------------------- settings
     def settings_get(self, user, **_):

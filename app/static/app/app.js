@@ -90,7 +90,9 @@
     out: '<path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h10"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>',
     spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
-    check: '<path d="M5 12l5 5 9-10"/>'
+    check: '<path d="M5 12l5 5 9-10"/>',
+    scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 10h8M8 14h5"/>',
+    up: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>'
   };
   function icon(name, size) {
     return '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + I[name] + '</svg>';
@@ -128,7 +130,7 @@
   // ------------------------------------------------------------------ 框架
   var NAV = [
     ['dashboard', '工作台', 'home'], ['leads', '询盘客户', 'leads'], ['new', '录入询盘', 'plus'],
-    ['products', '产品库', 'box'], ['quotes', '报价记录', 'file'], ['notifications', '提醒', 'bell'],
+    ['products', '产品库', 'box'], ['quotes', '报价记录', 'file'], ['doccheck', '单证核对', 'scan'], ['notifications', '提醒', 'bell'],
     ['settings', '设置', 'gear'], ['users', '成员', 'users', true]
   ];
   function navHtml(cur) {
@@ -539,6 +541,118 @@
   }
 
   // ------------------------------------------------------------------ 报价记录
+
+  // ------------------------------------------------------------------ 单证核对
+  var DC_EXT = ['.pdf', '.xlsx', '.xlsm', '.docx', '.csv', '.txt'];
+  function dcGuess(name) {
+    var n = name.toUpperCase();
+    if (/PROFORMA|(^|[^A-Z])PI([^A-Z]|$)|形式发票/.test(n)) return 'PI';
+    if (/PACKING|(^|[^A-Z])PL([^A-Z]|$)|装箱/.test(n)) return '装箱单';
+    if (/报关|CUSTOMS|申报/.test(n)) return '报关资料';
+    if (/INVOICE|(^|[^A-Z])CI([^A-Z]|$)|发票/.test(n)) return '商业发票';
+    return '单据';
+  }
+  function fileB64(f) {
+    return new Promise(function (ok, bad) {
+      var r = new FileReader();
+      r.onload = function () { ok(String(r.result).split(',')[1] || ''); };
+      r.onerror = function () { bad(new Error(f.name + ' 读取失败')); };
+      r.readAsDataURL(f);
+    });
+  }
+  ROUTES.doccheck = function (page, parts) {
+    var files = [];
+    page.innerHTML = head('单证核对', '把 PI、商业发票、装箱单、报关资料一起放进来，交叉核对数量、金额、重量、HS 编码。') +
+      '<div class="card dc-up"><label class="dc-drop" id="dcDrop"><input type="file" id="dcInput" multiple accept="' + DC_EXT.join(',') + '" hidden>' +
+      '<div class="dc-ico">' + icon('up', 26) + '</div><b>拖进来，或点这里选择单据</b><span class="small muted">PDF（文字版）、Excel、Word、CSV · 一次 2–8 份</span></label>' +
+      '<div id="dcFiles" class="dc-files"></div>' +
+      '<div class="row between wrap" style="margin-top:14px"><span class="small dim">单据只在你们自己的服务器上处理，不会发到外面</span>' +
+      '<button class="btn primary lg" id="dcRun" disabled>' + icon('scan', 17) + '开始核对</button></div></div>' +
+      '<div id="dcResult"></div><div class="card" style="margin-top:14px"><h3>核对记录</h3><div id="dcHist"><div class="empty">加载中…</div></div></div>';
+    var input = $('#dcInput', page), drop = $('#dcDrop', page), runBtn = $('#dcRun', page);
+    function addFiles(list) {
+      Array.prototype.forEach.call(list, function (f) {
+        var ext = (f.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+        if (DC_EXT.indexOf(ext) < 0) { toast(f.name + '：暂不支持这种格式', true); return; }
+        if (f.size > 5 * 1024 * 1024) { toast(f.name + ' 超过 5MB', true); return; }
+        if (files.some(function (x) { return x.name === f.name; })) return;
+        if (files.length >= 8) { toast('一次最多 8 份', true); return; }
+        files.push(f);
+      });
+      renderFiles();
+    }
+    function renderFiles() {
+      $('#dcFiles', page).innerHTML = files.map(function (f, i) {
+        return '<div class="dc-file rise"><span class="dc-tag">' + esc(dcGuess(f.name)) + '</span><span class="grow ell">' + esc(f.name) + '</span>' +
+          '<span class="small dim num">' + Math.max(1, Math.round(f.size / 1024)) + ' KB</span><button class="icon-btn" data-rm="' + i + '" aria-label="移除">' + icon('x', 15) + '</button></div>';
+      }).join('');
+      runBtn.disabled = files.length < 2;
+    }
+    input.addEventListener('change', function () { addFiles(input.files); input.value = ''; });
+    ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('on'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('on'); }); });
+    drop.addEventListener('drop', function (e) { addFiles(e.dataTransfer.files); });
+    page.addEventListener('click', function (e) {
+      var rm = e.target.closest('[data-rm]');
+      if (rm) { files.splice(+rm.dataset.rm, 1); renderFiles(); return; }
+      var h = e.target.closest('[data-report]');
+      if (h) { api('GET', '/api/doccheck/' + h.dataset.report).then(function (r) { showReport(r, true); }).catch(fail); return; }
+      var cp = e.target.closest('[data-copyemail]');
+      if (cp) copy($('#dcEmail', page).textContent);
+    });
+    runBtn.addEventListener('click', function () {
+      busy(runBtn, true, '核对中');
+      var res = $('#dcResult', page);
+      res.innerHTML = '<div class="card dc-scan rise"><div class="dc-bar"><i></i></div><div class="dc-steps">' +
+        ['读取 ' + files.length + ' 份单据', '识别货物明细', '交叉比对数量 / 金额 / 重量 / HS 编码'].map(function (t, i) {
+          return '<div class="dc-step" style="animation-delay:' + (i * 0.28) + 's">' + icon('check', 14) + esc(t) + '</div>';
+        }).join('') + '</div></div>';
+      var started = Date.now();
+      Promise.all(files.map(function (f) { return fileB64(f).then(function (d) { return { name: f.name, data: d }; }); }))
+        .then(function (payload) { return api('POST', '/api/doccheck', { files: payload }); })
+        .then(function (r) {
+          return new Promise(function (ok) { setTimeout(function () { ok(r); }, Math.max(0, 900 - (Date.now() - started))); });
+        })
+        .then(function (r) { busy(runBtn, false); showReport(r); loadHist(); })
+        .catch(function (e) { busy(runBtn, false); res.innerHTML = ''; fail(e); });
+    });
+    function showReport(r, scroll) {
+      var res = $('#dcResult', page);
+      var n = r.issues.length;
+      var secs = (r.elapsed_ms / 1000).toFixed(r.elapsed_ms < 10000 ? 1 : 0);
+      var html = '<div class="dc-sum rise ' + (n ? 'bad' : 'ok') + '"><div class="dc-big num">' + (n || icon('check', 34)) + '</div><div class="grow"><b>' +
+        (n ? '发现 ' + n + ' 处对不上' : '全部一致，可以放心报关 / 寄单') + '</b><div class="small">核对 ' + r.docs.length + ' 份单据 · 比对 ' + r.checked + ' 项 · 用时 ' + secs + ' 秒</div></div></div>';
+      html += '<div class="dc-docs">' + r.docs.map(function (d) {
+        return '<div class="dc-doc' + (d.error ? ' err' : '') + '"><span class="dc-tag">' + esc(d.label) + '</span><span class="ell grow">' + esc(d.name) + '</span>' +
+          '<span class="small ' + (d.error ? '' : 'dim') + '">' + (d.error ? esc(d.error) : d.items + ' 行明细') + '</span></div>';
+      }).join('') + '</div>';
+      html += r.issues.map(function (x, i) {
+        return '<div class="dc-issue rise" style="animation-delay:' + (i * 0.12) + 's"><div class="row between"><b><span class="dc-no num">' + (i + 1) + '</span>' + esc(x.title) + '</b>' +
+          (x.likely_wrong ? '<span class="dc-wrong">可能写错：' + esc(x.likely_wrong) + '</span>' : '') + '</div>' +
+          '<div class="dc-vals">' + x.values.map(function (v) {
+            var bad = x.likely_wrong && v.doc === x.likely_wrong;
+            return '<div class="dc-val' + (bad ? ' bad' : '') + '"><span class="muted">' + esc(v.doc) + '</span><b class="num">' + esc(v.value) + '</b></div>';
+          }).join('') + '</div>' +
+          (x.notes.length ? '<div class="dc-note">💡 ' + esc(x.notes[0]) + '</div>' : '') + '</div>';
+      }).join('');
+      if (r.email) {
+        html += '<div class="card dc-mail rise"><div class="row between"><h3 style="margin:0">更正消息<span class="muted">发给货代 / 报关行</span></h3>' +
+          '<button class="btn sm" data-copyemail="1">' + icon('copy', 14) + '复制</button></div><pre id="dcEmail">' + esc(r.email) + '</pre></div>';
+      }
+      res.innerHTML = '<div class="dc-report">' + html + '</div>';
+      if (scroll !== false) res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function loadHist() {
+      api('GET', '/api/doccheck').then(function (d) {
+        $('#dcHist', page).innerHTML = d.items.length ? d.items.map(function (x) {
+          return '<div class="row dc-h" data-report="' + esc(x.id) + '"><span class="dc-cnt num ' + (x.issues ? 'bad' : 'ok') + '">' + (x.issues || '✓') + '</span>' +
+            '<div class="grow"><div class="ell">' + esc(x.files) + '</div><div class="small dim">' + esc(x.by) + ' · ' + fmtDate(x.at, true) + '</div></div></div>';
+        }).join('') : '<div class="empty">还没有核对过单据。</div>';
+      }).catch(fail);
+    }
+    loadHist();
+  };
+
   ROUTES.quotes = function (page) {
     return api('GET', '/api/quotes').then(function (d) {
       page.innerHTML = head('报价记录', '每一次生成的报价单都在这里，可以随时重新下载。') +
